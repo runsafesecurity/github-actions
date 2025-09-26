@@ -1,0 +1,22 @@
+#
+name: "Runsafe Platform Cleanup Action"
+description: "Cleanup Runsafe Platform"
+runs:
+  using: "composite"
+  steps:
+    - name: Runsafe Platform Cleanup
+      shell: bash
+      run: |
+        if [ ! -z "${RUNSAFE_DISABLED}" ]; then
+          echo "RunSafe protections disabled for this job";
+        else
+          if [ ! -z "$RUNSAFE_IDENTIFY_ENABLED" ]; then
+            if [ -f "${GITHUB_WORKSPACE}/${GITHUB_JOB}.runsafe_saved_ld_preload.env" ]; then
+              echo "Restoring LD_PRELOAD...";
+              export LD_PRELOAD=$(cat ${GITHUB_WORKSPACE}/${GITHUB_JOB}.runsafe_saved_ld_preload.env)
+              unset RUNSAFE_SAVED_LD_PRELOAD;
+            fi;
+            runsafe_sbom_cli collector generate --most-recent --output-file sbom-cpp-${RUNSAFE_SBOM_ID}.cdx.json        
+            runsafe_sbom_cli upload-sbom -i sbom-cpp*.cdx.json || echo "Failed to upload SBOM!"
+          fi;
+        fi;
