@@ -12,6 +12,8 @@ Your RunSafe license key can be found on the RunSafe Platform [here](https://app
 
 RunSafe has two actions - `setup` and `cleanup` - which must be present for your C++ builds to integrate with the RunSafe Platform. The `setup` action must go **before** your C++ build and the `cleanup` action must go **after** your C++ build. The `setup` action must also be configured to be able to access your `RUNSAFE_LICENSE_KEY` secret.
 
+If you have multiple jobs with C++ builds they must each be configured with these two RunSafe actions.
+
 ### Example
 
 #### Without RunSafe
