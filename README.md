@@ -6,7 +6,7 @@ To integrate with C++ builds, you must configure your RunSafe license key as a G
 
 ## Secrets
 
-Your RunSafe license key can be found on the RunSafe Platform [here](https://app.runsafesecurity.com/account/license-key). It must be specified as a secret named `RUNSAFE_LICENSE_KEY` either in your organization or each project which you configure with the RunSafe Platform. GitHub's documentation on configuring secrets can be found [here](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets).
+Your RunSafe license key can be found on the RunSafe Platform [here](https://app.runsafesecurity.com/account/license-key). It must be specified as a secret named `RUNSAFE_LICENSE_KEY` either for your entire GitHub organization or each GitHub project which you configure with the RunSafe Platform. GitHub's documentation on configuring secrets can be found [here](https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/use-secrets).
 
 ## GitHub Actions
 
