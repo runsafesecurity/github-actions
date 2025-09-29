@@ -2,7 +2,7 @@
 
 The [RunSafe Platform](https://app.runsafesecurity.com/) can integrate with your GitHub workflows to generate SBOMs, detect vulnerabilities, block builds with incompatible licenses, and more.
 
-To integrate with C++ repositories, you must configure your RunSafe license key as a GitHub secret and add RunSafe's GitHub `setup` and `cleanup` actions to your workflows, around your C++ builds.
+To integrate with C++ builds, you must configure your RunSafe license key as a GitHub secret and add RunSafe's GitHub `setup` and `cleanup` actions to your workflows, around your C++ builds.
 
 ## Secrets
 
