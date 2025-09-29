@@ -23,5 +23,5 @@ jobs:
         description: Replace below with your C++ build
         run: ldd ./util/hello
       # Runsafe Cleanup Action
-      - uses: runsafesecurity/github-actions-dev/cleanup@v1
+      - uses: runsafesecurity/github-actions/cleanup@v1
 ```
