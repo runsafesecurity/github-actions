@@ -17,25 +17,19 @@ runs:
           echo "'curl' command not found, please make sure 'curl' is installed when running Runsafe Platform Github Action." >&2
           exit 1
         fi
-    - name: Map Github Env Vars
+    - name: List Github Env Vars
       shell: bash
       run: |
         echo "GITHUB_REPOSITORY_ID: $GITHUB_REPOSITORY_ID"
-        echo "CI_PROJECT_ID=$GITHUB_REPOSITORY_ID" >> $GITHUB_ENV
         echo "GITHUB_SHA: $GITHUB_SHA"
-        echo "CI_COMMIT_SHA=$GITHUB_SHA" >> $GITHUB_ENV
         echo "GITHUB_SERVER_URL: $GITHUB_SERVER_URL"
-        echo "CI_SERVER_URL=$GITHUB_SERVER_URL" >> $GITHUB_ENV
         echo "GITHUB_RUN_ID: $GITHUB_RUN_ID"
-        echo "CI_PIPELINE_ID=$GITHUB_RUN_ID" >> $GITHUB_ENV
         echo "GITHUB_REF_NAME: $GITHUB_REF_NAME"
-        echo "CI_COMMIT_REF_NAME=$GITHUB_REF_NAME" >> $GITHUB_ENV
         echo "GITHUB_RUN_ATTEMPT: $GITHUB_RUN_ATTEMPT"
-        echo "CI_JOB_ID=$GITHUB_JOB" >> $GITHUB_ENV
     - name: Runsafe Platform Setup
       shell: bash
       env:
-        RUNSAFE_SBOM_GENERATOR_VERSION: 1.3.2
+        RUNSAFE_SBOM_GENERATOR_VERSION: 2.0.4
         RUNSAFE_PROTECT_VERSION: 5.3.5
       run: |
         RUNSAFE_SERVER=https://app.runsafesecurity.com
@@ -50,10 +44,8 @@ runs:
         export RUNSAFE_LICENSE_KEY=${RUNSAFE_LICENSE_KEY}
         echo "RUNSAFE_LICENSE_KEY=${RUNSAFE_LICENSE_KEY}" >> $GITHUB_ENV
 
-        export RUNSAFE_FEATURES_ENABLED=$(curl -H "x-runsafe-license-key: ${RUNSAFE_LICENSE_KEY}" ${RUNSAFE_SBOM_SERVER}/api/external-repos/github/${GITHUB_REPOSITORY_ID}/enabled-features)
-        echo $RUNSAFE_FEATURES_ENABLED
-
-        cd ${GITHUB_WORKSPACE}
+        export RUNSAFE_FEATURES_ENABLED=$($GITHUB_ACTION_PATH/RUNSAFE_SBOM_PACKAGES/bin/runsafe_sbom platform enabled-features)
+        echo "Enabled features = ${RUNSAFE_FEATURES_ENABLED}"
 
         if [[ $RUNSAFE_FEATURES_ENABLED == *"protect-source"* ]]; then
           echo "Protect Source!";
@@ -62,12 +54,14 @@ runs:
           echo "RUNSAFE_PROTECT_SOURCE_ENABLED=${RUNSAFE_PROTECT_SOURCE_ENABLED}" >> $GITHUB_ENV
         fi
 
+        cd ${GITHUB_WORKSPACE}
+
         if [[ $RUNSAFE_FEATURES_ENABLED == *"identify"* ]]; then
           echo "Identify!";
           mv $GITHUB_ACTION_PATH/RUNSAFE_SBOM_PACKAGES ${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES
 
-          RUNSAFE_SBOM_PACKAGES/bin/runsafe_sbom_cli start-scan
-          export RUNSAFE_AUDIT_ID=$(RUNSAFE_SBOM_PACKAGES/bin/runsafe_sbom_cli start-audit)
+          RUNSAFE_SBOM_PACKAGES/bin/runsafe_sbom platform start-scan
+          export RUNSAFE_AUDIT_ID=$(RUNSAFE_SBOM_PACKAGES/bin/runsafe_sbom platform start-audit)
           export RUNSAFE_RET_CODE=$?
           if [ -z "${RUNSAFE_AUDIT_ID}" ]; then echo Error creating RUNSAFE_AUDIT_ID, exiting...; exit 1; fi
           export RUNSAFE_SBOM_SERVER_NO_PREFIX=${RUNSAFE_SBOM_SERVER#*//}
@@ -92,12 +86,12 @@ runs:
               export RUNSAFE_ROOT_PATH=${GITHUB_WORKSPACE};
               echo "RUNSAFE_ROOT_PATH=${RUNSAFE_ROOT_PATH}" >> $GITHUB_ENV
               sh -c 'cd ${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES; ./scripts/install_packages.sh';
-              export RUNSAFE_SBOM_ID=$(runsafe_sbom_cli start-sbom);
+              export RUNSAFE_SBOM_ID=$(runsafe_sbom platform start-sbom);
               export RUNSAFE_RET_CODE=$?;
               echo "RUNSAFE_RET_CODE=${RUNSAFE_RET_CODE}" >> $GITHUB_ENV
               echo RUNSAFE_SBOM_ID=${RUNSAFE_SBOM_ID};
               echo "RUNSAFE_SBOM_ID=${RUNSAFE_SBOM_ID}" >> $GITHUB_ENV
-              runsafe_sbom_cli collector daemon
+              runsafe_sbom init -y || echo "Problem initializing 'runsafe_sbom'"
               echo ${LD_PRELOAD} > ${GITHUB_WORKSPACE}/${GITHUB_JOB}.runsafe_saved_ld_preload.env
               export LD_PRELOAD=librunsafe_sbom.so.${RUNSAFE_SBOM_GENERATOR_VERSION}:${LD_PRELOAD};
               echo "LD_PRELOAD=${LD_PRELOAD}" >> $GITHUB_ENV
