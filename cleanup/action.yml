@@ -16,7 +16,7 @@ runs:
               export LD_PRELOAD=$(cat ${GITHUB_WORKSPACE}/${GITHUB_JOB}.runsafe_saved_ld_preload.env)
               unset RUNSAFE_SAVED_LD_PRELOAD;
             fi;
-            runsafe_sbom generate --most-recent --output-file sbom-cpp-${RUNSAFE_SBOM_ID}.cdx.json        
+            runsafe_sbom generate --output-file sbom-cpp-${RUNSAFE_SBOM_ID}.cdx.json
             runsafe_sbom platform upload-sbom -i sbom-cpp*.cdx.json || echo "Failed to upload SBOM!"
           fi;
         fi;

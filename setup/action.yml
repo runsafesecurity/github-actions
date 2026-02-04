@@ -29,7 +29,7 @@ runs:
     - name: Runsafe Platform Setup
       shell: bash
       env:
-        RUNSAFE_SBOM_GENERATOR_VERSION: 2.0.4
+        RUNSAFE_SBOM_GENERATOR_VERSION: 2.5.1
         RUNSAFE_PROTECT_VERSION: 5.3.5
       run: |
         RUNSAFE_SERVER=https://app.runsafesecurity.com
@@ -91,7 +91,7 @@ runs:
               echo "RUNSAFE_RET_CODE=${RUNSAFE_RET_CODE}" >> $GITHUB_ENV
               echo RUNSAFE_SBOM_ID=${RUNSAFE_SBOM_ID};
               echo "RUNSAFE_SBOM_ID=${RUNSAFE_SBOM_ID}" >> $GITHUB_ENV
-              runsafe_sbom init -y || echo "Problem initializing 'runsafe_sbom'"
+              runsafe_sbom login && runsafe_sbom service start
               echo ${LD_PRELOAD} > ${GITHUB_WORKSPACE}/${GITHUB_JOB}.runsafe_saved_ld_preload.env
               export LD_PRELOAD=librunsafe_sbom.so.${RUNSAFE_SBOM_GENERATOR_VERSION}:${LD_PRELOAD};
               echo "LD_PRELOAD=${LD_PRELOAD}" >> $GITHUB_ENV
