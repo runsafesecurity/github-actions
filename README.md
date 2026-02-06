@@ -93,3 +93,35 @@ jobs:
 +      # Runsafe Cleanup Action
 +      - uses: runsafesecurity/github-actions/cleanup@v1
 ```
+
+### Debug
+
+Setting the environment variable `RUNSAFE_LOG_LEVEL` to `debug` in the build job will add additional logging.
+
+#### Diff with Debug
+
+```diff
+name: C++ Build Workflow
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  cpp-build:
+    name: C++ Build Job
+    runs-on: ubuntu-latest
++   env:
++     RUNSAFE_LOG_LEVEL: debug
+    steps:
+      - uses: actions/checkout@v2
++      # Runsafe Setup Action
++      - uses: runsafesecurity/github-actions/setup@v1
++        with:
++          license_key: ${{ secrets.RUNSAFE_LICENSE_KEY }}
+      - name: Build cpp
+        description: Build hello_world with make
+        run: make hello_world
++      # Runsafe Cleanup Action
++      - uses: runsafesecurity/github-actions/cleanup@v1
+```
