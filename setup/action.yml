@@ -32,6 +32,7 @@ runs:
         RUNSAFE_SBOM_GENERATOR_VERSION: 2.5.1
         RUNSAFE_PROTECT_VERSION: 5.3.5
       run: |
+
         RUNSAFE_SERVER=https://app.runsafesecurity.com
         if [ -z "${RUNSAFE_SBOM_SERVER}" ]; then export RUNSAFE_SBOM_SERVER=${RUNSAFE_SERVER}; fi
         if [ -z "${RUNSAFE_LICENSE_SERVER}" ]; then export RUNSAFE_LICENSE_SERVER=${RUNSAFE_SERVER}; fi
@@ -88,13 +89,18 @@ runs:
               sh -c 'cd ${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES; ./scripts/install_packages.sh';
               export RUNSAFE_SBOM_ID=$(runsafe_sbom platform start-sbom);
               export RUNSAFE_RET_CODE=$?;
-              echo "RUNSAFE_RET_CODE=${RUNSAFE_RET_CODE}" >> $GITHUB_ENV
+              echo "RUNSAFE_RET_CODE=${RUNSAFE_RET_CODE}" >> $GITHUB_ENV;
               echo RUNSAFE_SBOM_ID=${RUNSAFE_SBOM_ID};
-              echo "RUNSAFE_SBOM_ID=${RUNSAFE_SBOM_ID}" >> $GITHUB_ENV
-              runsafe_sbom login && runsafe_sbom service start
-              echo ${LD_PRELOAD} > ${GITHUB_WORKSPACE}/${GITHUB_JOB}.runsafe_saved_ld_preload.env
+              echo "RUNSAFE_SBOM_ID=${RUNSAFE_SBOM_ID}" >> $GITHUB_ENV;
+              runsafe_sbom login && runsafe_sbom service start;
+              echo ${LD_PRELOAD} > ${GITHUB_WORKSPACE}/${GITHUB_JOB}.runsafe_saved_ld_preload.env;
               export LD_PRELOAD=librunsafe_sbom.so.${RUNSAFE_SBOM_GENERATOR_VERSION}:${LD_PRELOAD};
               echo "LD_PRELOAD=${LD_PRELOAD}" >> $GITHUB_ENV
+              if [[ "${RUNSAFE_LOG_LEVEL}" == "debug" ]]; then
+                echo "Setting LD_DEBUG=libs for debug logging";
+                export LD_DEBUG=libs;
+                echo "LD_DEBUG=${LD_DEBUG}" >> $GITHUB_ENV;
+              fi
             fi;
           fi
         fi;
