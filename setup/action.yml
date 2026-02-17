@@ -96,7 +96,7 @@ runs:
               echo ${LD_PRELOAD} > ${GITHUB_WORKSPACE}/${GITHUB_JOB}.runsafe_saved_ld_preload.env;
               export LD_PRELOAD=librunsafe_sbom.so.${RUNSAFE_SBOM_GENERATOR_VERSION}:${LD_PRELOAD};
               echo "LD_PRELOAD=${LD_PRELOAD}" >> $GITHUB_ENV
-              if [[ "${RUNSAFE_LOG_LEVEL}" == "debug" ]]; then
+              if [[ "${RUNSAFE_SBOM_LOG_LEVEL}" == "debug" ]]; then
                 echo "Setting LD_DEBUG=libs for debug logging";
                 export LD_DEBUG=libs;
                 echo "LD_DEBUG=${LD_DEBUG}" >> $GITHUB_ENV;
