@@ -13,7 +13,7 @@ runs:
     - name: Verify curl command is available
       shell: bash
       run: |
-        if ! command -v curl >/dev/null 2>&1; then 
+        if ! command -v curl >/dev/null 2>&1; then
           echo "'curl' command not found, please make sure 'curl' is installed when running Runsafe Platform Github Action." >&2
           exit 1
         fi
@@ -29,7 +29,7 @@ runs:
     - name: Runsafe Platform Setup
       shell: bash
       env:
-        RUNSAFE_SBOM_GENERATOR_VERSION: 2.5.1
+        RUNSAFE_SBOM_GENERATOR_VERSION: 2.7.0
         RUNSAFE_PROTECT_VERSION: 5.3.5
       run: |
 
@@ -50,7 +50,7 @@ runs:
 
         if [[ $RUNSAFE_FEATURES_ENABLED == *"protect-source"* ]]; then
           echo "Protect Source!";
-          mv $GITHUB_ACTION_PATH/RUNSAFE_PROTECT_SOURCE_PACKAGES ${GITHUB_WORKSPACE}/RUNSAFE_PROTECT_SOURCE_PACKAGES 
+          mv $GITHUB_ACTION_PATH/RUNSAFE_PROTECT_SOURCE_PACKAGES ${GITHUB_WORKSPACE}/RUNSAFE_PROTECT_SOURCE_PACKAGES
           export RUNSAFE_PROTECT_SOURCE_ENABLED=1
           echo "RUNSAFE_PROTECT_SOURCE_ENABLED=${RUNSAFE_PROTECT_SOURCE_ENABLED}" >> $GITHUB_ENV
         fi

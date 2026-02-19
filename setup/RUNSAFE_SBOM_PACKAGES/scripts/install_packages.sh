@@ -1,6 +1,10 @@
 #!/bin/bash
 
-set -e
+if [[ -v RUNSAFE_SBOM_LOG_LEVEL ]]; then
+  set -ex
+else
+  set -e
+fi
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$( dirname -- "$0" )" && pwd -P)
 ROOT_DIR=${SCRIPT_DIR}/../
@@ -65,9 +69,9 @@ redhat)
   for pkg in ${pkgs_list}; do
     is_installed=$(rpm -i --nosignature --test "${pkg}" 2>&1 || true)
     case "${is_installed}" in
-    *"already installed"*) 
+    *"already installed"*)
 	;;
-    *) 
+    *)
 	pkgs_to_install="${pkgs_to_install} ${pkg}"
 	;;
     esac
