@@ -1,4 +1,3 @@
-#
 name: "Runsafe Setup SBOM Action"
 description: "Setup Runsafe Platform"
 inputs:
@@ -10,13 +9,6 @@ runs:
   using: "composite"
 
   steps:
-    - name: Verify curl command is available
-      shell: bash
-      run: |
-        if ! command -v curl >/dev/null 2>&1; then 
-          echo "'curl' command not found, please make sure 'curl' is installed when running Runsafe Platform Github Action." >&2
-          exit 1
-        fi
     - name: List Github Env Vars
       shell: bash
       run: |
@@ -29,10 +21,9 @@ runs:
     - name: Runsafe Platform Setup
       shell: bash
       env:
-        RUNSAFE_SBOM_GENERATOR_VERSION: 2.5.1
+        RUNSAFE_SBOM_GENERATOR_VERSION: 2.7.0
         RUNSAFE_PROTECT_VERSION: 5.3.5
       run: |
-
         RUNSAFE_SERVER=https://app.runsafesecurity.com
         if [ -z "${RUNSAFE_SBOM_SERVER}" ]; then export RUNSAFE_SBOM_SERVER=${RUNSAFE_SERVER}; fi
         if [ -z "${RUNSAFE_LICENSE_SERVER}" ]; then export RUNSAFE_LICENSE_SERVER=${RUNSAFE_SERVER}; fi
@@ -45,24 +36,65 @@ runs:
         export RUNSAFE_LICENSE_KEY=${RUNSAFE_LICENSE_KEY}
         echo "RUNSAFE_LICENSE_KEY=${RUNSAFE_LICENSE_KEY}" >> $GITHUB_ENV
 
-        export RUNSAFE_FEATURES_ENABLED=$($GITHUB_ACTION_PATH/RUNSAFE_SBOM_PACKAGES/bin/runsafe_sbom platform enabled-features)
-        echo "Enabled features = ${RUNSAFE_FEATURES_ENABLED}"
+        RUNSAFE_FEATURES_ENABLED=$(curl -L -H "x-runsafe-license-key: ${RUNSAFE_LICENSE_KEY}" ${RUNSAFE_SBOM_SERVER}/api/external-repos/github/${GITHUB_REPOSITORY_ID}/enabled-features)
+        CURL_EXIT_CODE=$?
+        if [ $CURL_EXIT_CODE -ne 0 ]; then
+          echo "Error: Failed to fetch enabled features from Runsafe Platform (exit code $CURL_EXIT_CODE)"
+          exit 1
+        fi
+        export RUNSAFE_FEATURES_ENABLED
+        echo $RUNSAFE_FEATURES_ENABLED
 
+        cd ${GITHUB_WORKSPACE}
+
+        # Detect OS for package format
+        if [ -f /etc/os-release ]; then . /etc/os-release; fi
+        case "${ID:-}" in
+          ubuntu|debian) PKG_FMT=deb ;;
+          rhel|centos|rocky|fedora|amzn) PKG_FMT=rpm ;;
+          alpine) PKG_FMT=apk ;;
+          *) PKG_FMT=deb ;;
+        esac
         if [[ $RUNSAFE_FEATURES_ENABLED == *"protect-source"* ]]; then
           echo "Protect Source!";
-          mv $GITHUB_ACTION_PATH/RUNSAFE_PROTECT_SOURCE_PACKAGES ${GITHUB_WORKSPACE}/RUNSAFE_PROTECT_SOURCE_PACKAGES 
+          mkdir -p RUNSAFE_PROTECT_SOURCE_PACKAGES
+          BASE_URL=https://packages.runsafesecurity.com/public/runsafe
+          if [ "$PKG_FMT" = deb ]; then
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-licensechecker_${RUNSAFE_PROTECT_VERSION}_amd64.deb ${BASE_URL}/deb/any-distro/pool/any-version/main/a/al/alkemist-lfr-licensechecker_${RUNSAFE_PROTECT_VERSION}/alkemist-lfr-licensechecker_${RUNSAFE_PROTECT_VERSION}_amd64.deb
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr_${RUNSAFE_PROTECT_VERSION}_amd64.deb ${BASE_URL}/deb/any-distro/pool/any-version/main/a/al/alkemist-lfr_${RUNSAFE_PROTECT_VERSION}/alkemist-lfr_${RUNSAFE_PROTECT_VERSION}_amd64.deb
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-liblfr-dev_${RUNSAFE_PROTECT_VERSION}_amd64.deb ${BASE_URL}/deb/any-distro/pool/any-version/main/a/al/alkemist-liblfr-dev_${RUNSAFE_PROTECT_VERSION}/alkemist-liblfr-dev_${RUNSAFE_PROTECT_VERSION}_amd64.deb
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-liblfr_${RUNSAFE_PROTECT_VERSION}_amd64.deb ${BASE_URL}/deb/any-distro/pool/any-version/main/a/al/alkemist-liblfr_${RUNSAFE_PROTECT_VERSION}/alkemist-liblfr_${RUNSAFE_PROTECT_VERSION}_amd64.deb
+          elif [ "$PKG_FMT" = rpm ]; then
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm ${BASE_URL}/rpm/any-distro/any-version/x86_64/alkemist-lfr-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-liblfr-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm ${BASE_URL}/rpm/any-distro/any-version/x86_64/alkemist-lfr-liblfr-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-liblfr-${RUNSAFE_PROTECT_VERSION}-1.i386.rpm ${BASE_URL}/rpm/any-distro/any-version/i386/alkemist-lfr-liblfr-${RUNSAFE_PROTECT_VERSION}-1.i386.rpm
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-liblfr-dev-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm ${BASE_URL}/rpm/any-distro/any-version/x86_64/alkemist-lfr-liblfr-dev-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-liblfr-dev-${RUNSAFE_PROTECT_VERSION}-1.i386.rpm ${BASE_URL}/rpm/any-distro/any-version/i386/alkemist-lfr-liblfr-dev-${RUNSAFE_PROTECT_VERSION}-1.i386.rpm
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-licensechecker-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm ${BASE_URL}/rpm/any-distro/any-version/x86_64/alkemist-lfr-licensechecker-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm
+          elif [ "$PKG_FMT" = apk ]; then
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-${RUNSAFE_PROTECT_VERSION}-r0.apk ${BASE_URL}/alpine/any-version/main/x86_64/alkemist-lfr-${RUNSAFE_PROTECT_VERSION}-r0.apk
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-licensechecker-${RUNSAFE_PROTECT_VERSION}-r0.apk ${BASE_URL}/alpine/any-version/main/x86_64/alkemist-lfr-licensechecker-${RUNSAFE_PROTECT_VERSION}-r0.apk
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-liblfr-${RUNSAFE_PROTECT_VERSION}-r0.apk ${BASE_URL}/alpine/any-version/main/x86_64/alkemist-liblfr-${RUNSAFE_PROTECT_VERSION}-r0.apk
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-liblfr-dev-${RUNSAFE_PROTECT_VERSION}-r0.apk ${BASE_URL}/alpine/any-version/main/x86_64/alkemist-liblfr-dev-${RUNSAFE_PROTECT_VERSION}-r0.apk
+          fi
           export RUNSAFE_PROTECT_SOURCE_ENABLED=1
           echo "RUNSAFE_PROTECT_SOURCE_ENABLED=${RUNSAFE_PROTECT_SOURCE_ENABLED}" >> $GITHUB_ENV
         fi
 
-        cd ${GITHUB_WORKSPACE}
-
         if [[ $RUNSAFE_FEATURES_ENABLED == *"identify"* ]]; then
           echo "Identify!";
-          mv $GITHUB_ACTION_PATH/RUNSAFE_SBOM_PACKAGES ${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES
-
-          RUNSAFE_SBOM_PACKAGES/bin/runsafe_sbom platform start-scan
-          export RUNSAFE_AUDIT_ID=$(RUNSAFE_SBOM_PACKAGES/bin/runsafe_sbom platform start-audit)
+          mkdir -p RUNSAFE_SBOM_PACKAGES
+          curl -L -s https://packages.runsafesecurity.com/public/runsafe/raw/versions/${RUNSAFE_SBOM_GENERATOR_VERSION}/download_runsafe_sbom_packages.sh -o download_runsafe_sbom_packages.sh
+          chmod +x download_runsafe_sbom_packages.sh
+          cd RUNSAFE_SBOM_PACKAGES
+          ../download_runsafe_sbom_packages.sh
+          mkdir -p bin
+          curl -L -o bin/runsafe_sbom https://packages.runsafesecurity.com/public/runsafe/raw/versions/${RUNSAFE_SBOM_GENERATOR_VERSION}/runsafe_sbom
+          chmod +x bin/runsafe_sbom
+          chmod +x scripts/*.sh 2>/dev/null || true
+          cd ..
+          ${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin/runsafe_sbom platform start-scan
+          export RUNSAFE_AUDIT_ID=$(${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin/runsafe_sbom platform start-audit)
           export RUNSAFE_RET_CODE=$?
           if [ -z "${RUNSAFE_AUDIT_ID}" ]; then echo Error creating RUNSAFE_AUDIT_ID, exiting...; exit 1; fi
           export RUNSAFE_SBOM_SERVER_NO_PREFIX=${RUNSAFE_SBOM_SERVER#*//}
@@ -80,7 +112,7 @@ runs:
             export RUNSAFE_SBOM_DISABLED=1;
           else
             if [ ! -z "$RUNSAFE_PROTECT_SOURCE_ENABLED" ]; then
-              sh -c 'cd ${GITHUB_WORKSPACE}/RUNSAFE_PROTECT_SOURCE_PACKAGES; (sudo apt-get update && sudo apt-get install -y ./*.deb) || (apt-get update && apt-get install -y ./*.deb) || yum localinstall -y *.rpm || apk add --allow-untrusted *.apk'
+              sh -c 'cd ${GITHUB_WORKSPACE}/RUNSAFE_PROTECT_SOURCE_PACKAGES; (sudo apt-get update && sudo apt-get install -y ./*.deb) || (apt-get update && apt-get install -y ./*.deb) || (sudo yum localinstall -y *.rpm || yum localinstall -y *.rpm) || (sudo dnf install -y ./*.rpm || dnf install -y ./*.rpm) || (sudo apk add --allow-untrusted *.apk || apk add --allow-untrusted *.apk)'
               echo "/usr/bin/alkemist/lfr/scripts" >> $GITHUB_PATH
             fi;
             if [ ! -z "$RUNSAFE_IDENTIFY_ENABLED" ]; then
