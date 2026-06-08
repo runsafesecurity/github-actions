@@ -1,0 +1,49 @@
+name: "Runsafe .NET Platform Cleanup"
+description: "Cleanup Runsafe Platform for .NET"
+runs:
+  using: "composite"
+  steps:
+    - name: Runsafe .NET Platform Cleanup - Linux
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        CAPTURE_FILE="${GITHUB_WORKSPACE}/.dotnet_projects_captured/${GITHUB_RUN_ID}_scan_roots.txt"
+        RUNSAFE_DOTNET_PROJECTS_CAPTURE_FILE=${CAPTURE_FILE}
+        echo "RUNSAFE_DOTNET_PROJECTS_CAPTURE_FILE=${CAPTURE_FILE}" >> "$GITHUB_ENV"
+        echo "RUNSAFE_DOTNET_PROJECTS_CAPTURE_FILE=${RUNSAFE_DOTNET_PROJECTS_CAPTURE_FILE}" >> "$GITHUB_ENV"
+        echo "RUNSAFE_REAL_DOTNET_PATH=$(command -v dotnet)" >> "$GITHUB_ENV"
+        echo "${GITHUB_WORKSPACE}/.runsafe_dotnet_interceptor" >> "$GITHUB_PATH"
+
+        . ${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin/dotnet-gremlin-cleanup.sh
+    - name: Runsafe Platform Cleanup
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        if [ ! -z "${RUNSAFE_DISABLED}" ]; then
+          echo "RunSafe protections disabled for this job";
+        else
+          if [ ! -z "$RUNSAFE_IDENTIFY_ENABLED" ]; then
+            if [ -f "${GITHUB_WORKSPACE}/${GITHUB_RUN_ID}.runsafe_saved_ld_preload.env" ]; then
+              echo "Restoring LD_PRELOAD...";
+              export LD_PRELOAD=$(cat ${GITHUB_WORKSPACE}/${GITHUB_RUN_ID}.runsafe_saved_ld_preload.env)
+              unset RUNSAFE_SAVED_LD_PRELOAD;
+            fi;
+            runsafe_sbom generate --output-file sbom-cpp-${RUNSAFE_SBOM_ID}.cdx.json
+            runsafe_sbom platform upload-sbom -i sbom-cpp*.cdx.json || echo "Failed to upload SBOM!"
+          fi;
+        fi;
+    - name: Runsafe .NET Platform Cleanup - Windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $captureFile = Join-Path $env:GITHUB_WORKSPACE ".dotnet_projects_captured\$($env:GITHUB_RUN_ID)_scan_roots.txt"
+        $env:RUNSAFE_DOTNET_PROJECTS_CAPTURE_FILE = $captureFile
+        Add-Content -LiteralPath $env:GITHUB_ENV -Value "RUNSAFE_DOTNET_PROJECTS_CAPTURE_FILE=$captureFile"
+
+        $realDotnet = (Get-Command dotnet -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Path
+        if ($realDotnet) {
+          Add-Content -LiteralPath $env:GITHUB_ENV -Value "RUNSAFE_REAL_DOTNET_PATH=$realDotnet"
+        }
+        Add-Content -LiteralPath $env:GITHUB_PATH -Value (Join-Path $env:GITHUB_WORKSPACE '.runsafe_dotnet_interceptor')
+
+        & "$env:GITHUB_WORKSPACE\RUNSAFE_SBOM_PACKAGES\bin\dotnet-gremlin-cleanup.ps1"
