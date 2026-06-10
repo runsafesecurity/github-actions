@@ -1,0 +1,153 @@
+name: "Runsafe Docker Platform Cleanup"
+description: "Cleanup Runsafe Platform for Docker"
+runs:
+  using: "composite"
+  steps:
+    - name: Runsafe Docker Platform Cleanup - Linux
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        CAPTURE_FILE="${GITHUB_WORKSPACE}/.docker_images_captured/${GITHUB_RUN_ID}_built_images.txt"
+        RUNSAFE_DOCKER_IMAGES_CAPTURE_FILE=${CAPTURE_FILE}
+        echo "RUNSAFE_DOCKER_IMAGES_CAPTURE_FILE=${CAPTURE_FILE}" >> "$GITHUB_ENV"
+        echo "RUNSAFE_DOCKER_IMAGES_CAPTURE_FILE=${RUNSAFE_DOCKER_IMAGES_CAPTURE_FILE}" >> "$GITHUB_ENV"
+
+        if [ ! -z "${RUNSAFE_DISABLED}" ]; then
+          echo "[RunSafe Security] RunSafe protections disabled for this job";
+        elif [ -z "${RUNSAFE_IDENTIFY_ENABLED}" ]; then
+          echo "[RunSafe Security] RunSafe docker cleanup skipped for this job. Are you sure that Identify is enabled for this project?";
+          echo "[RunSafe Security] If that does not resolve the issue, please contact support@runsafesecurity.com."
+        else
+          echo "[RunSafe Security] Generating SBOMs for Docker images..."
+          export RUNSAFE_ROOT_PATH=${GITHUB_WORKSPACE};
+          # Process captured Docker images and upload SBOMs
+          CAPTURE_FILE="${RUNSAFE_DOCKER_IMAGES_CAPTURE_FILE:-${GITHUB_WORKSPACE}/.docker_images_captured/${GITHUB_RUN_ID}_built_images.txt}"
+
+          if [ -f "$CAPTURE_FILE" ] && [ -s "$CAPTURE_FILE" ]; then
+            echo "[RunSafe Security] Processing captured Docker images for SBOM generation..."
+
+            # Remove duplicate image names from the capture file
+            sort -u "$CAPTURE_FILE" -o "$CAPTURE_FILE"
+            if [ -z "${RUNSAFE_ORG_ID}" ]; then
+              echo "[RunSafe Security] Warning: RUNSAFE_ORG_ID is not set, skipping Docker image SBOM upload (setup may have failed or runsafe.env not loaded)."
+            else
+              export PATH=${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin:${PATH};
+              # Check if syft and runsafe_sbom are available
+              if ! command -v syft >/dev/null 2>&1; then
+                echo "[RunSafe Security] Warning: Skipping Docker image SBOM generation and upload"
+              else
+                if ! command -v curl >/dev/null 2>&1; then
+                  (apt-get update && apt-get install -y curl) 2>/dev/null || (yum install -y curl) 2>/dev/null || (apk add --allow-untrusted curl) 2>/dev/null
+                fi
+                # Ensure output directory exists
+                mkdir -p "${GITHUB_WORKSPACE}/.docker_images_captured" 2>/dev/null || true
+
+                RUNSAFE_DOCKER_AUDIT_ID=$(curl --fail -s -L -X POST \
+                  -H "x-runsafe-license-key: ${RUNSAFE_LICENSE_KEY}" \
+                  -H "Accept: application/json" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"source\":\"GitHub\",\"language\":\"docker\",\"serverUrl\":\"${GITHUB_SERVER_URL}\",\"pipelineId\":\"${GITHUB_RUN_ID}\",\"fullRepo\":\"${GITHUB_REPOSITORY_ID}\",\"sha\":\"${GITHUB_SHA}\",\"ref\":\"${GITHUB_REF_NAME}\"}" \
+                  "${RUNSAFE_SBOM_SERVER}/api/organizations/${RUNSAFE_ORG_ID}/audits" || true)
+                if [ -z "${RUNSAFE_DOCKER_AUDIT_ID}" ]; then
+                  echo "[RunSafe Security] Error: Could not obtain RUNSAFE_DOCKER_AUDIT_ID from start-audit (curl may have failed). Please review the RunSafe Gremlin Setup step for any errors. Contact support@runsafesecurity.com if you need assistance."
+                else
+                  # Process each image in the capture file
+                  while IFS= read -r image || [ -n "$image" ]; do
+                    # Skip empty lines and comments
+                    image=$(echo "$image" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                    if [ -z "$image" ]; then
+                      continue
+                    fi
+                    # Skip comment lines
+                    case "$image" in
+                      \#*)
+                        continue
+                        ;;
+                    esac
+
+                    echo "[RunSafe Security] Generating SBOM for Docker image: $image"
+                    # Sanitize image name for filename (replace : and / with -)
+                    runsafe_safe_image_name=$(echo "$image" | sed 's/[:/]/-/g')
+                    runsafe_sbom_file="${GITHUB_WORKSPACE}/.docker_images_captured/sbom-${runsafe_safe_image_name}.cdx.json"
+
+                    # Generate SBOM using syft (output format: cyclonedx-json)
+                    if syft "docker:${image}" --enrich all -o cyclonedx-json > "$runsafe_sbom_file" 2>/dev/null; then
+                      echo "[RunSafe Security] Successfully generated SBOM for $image"
+                      # Generate a new SBOM ID for this image
+                      RUNSAFE_TEMP_SBOM_ID=$(curl --fail -s -L -X POST \
+                        -H "x-runsafe-license-key: ${RUNSAFE_LICENSE_KEY}" \
+                        -d "" \
+                        "${RUNSAFE_SBOM_SERVER}/api/organizations/${RUNSAFE_ORG_ID}/audits/${RUNSAFE_DOCKER_AUDIT_ID}/start-sbom" || true)
+
+                      if [ -z "${RUNSAFE_TEMP_SBOM_ID}" ]; then
+                        echo "[RunSafe Security] Warning: Could not obtain SBOM ID from start-sbom for $image (empty response; curl may have failed). Skipping upload for this image. Please review the RunSafe Gremlin Setup step for any errors. Contact support@runsafesecurity.com if you need assistance."
+                      else
+                        # Upload SBOM to platform using the new SBOM ID
+                        RUNSAFE_HASH=$(sha256sum "${runsafe_sbom_file}" | cut -d' ' -f1)
+                        # URL-encode the Docker image reference so characters like :, /, @, + do not break the query string.
+                        # awk is part of POSIX and available in every distro we target, no extra install required.
+                        runsafe_image_encoded=$(awk -v s="$image" 'BEGIN {
+                          for (i = 0; i < 256; i++) h[sprintf("%c", i)] = sprintf("%%%02X", i)
+                          out = ""
+                          for (i = 1; i <= length(s); i++) {
+                            c = substr(s, i, 1)
+                            if (c ~ /[A-Za-z0-9._~-]/) out = out c
+                            else out = out h[c]
+                          }
+                          printf "%s", out
+                        }')
+                        echo "[RunSafe Security] runsafe_image_encoded=${runsafe_image_encoded}"
+                        runsafe_sbom_upload_exit_code=0
+                        curl --fail -sS -L -X PATCH \
+                          -H "x-runsafe-license-key: ${RUNSAFE_LICENSE_KEY}" \
+                          -H "Content-Type: application/octet-stream" \
+                          --data-binary @"${runsafe_sbom_file}" \
+                          -o /dev/null \
+                          "${RUNSAFE_SBOM_SERVER}/api/organizations/${RUNSAFE_ORG_ID}/audits/${RUNSAFE_DOCKER_AUDIT_ID}/sboms/${RUNSAFE_TEMP_SBOM_ID}?hash=${RUNSAFE_HASH}&status=complete&filePath=${runsafe_image_encoded}" \
+                          || runsafe_sbom_upload_exit_code=$?
+                        if [ "$runsafe_sbom_upload_exit_code" -eq 0 ]; then
+                          echo "[RunSafe Security] Successfully uploaded SBOM for $image to ${RUNSAFE_SBOM_SERVER}"
+                        else
+                          echo "[RunSafe Security] Warning: Failed to upload SBOM for $image (curl exit code: ${runsafe_sbom_upload_exit_code})"
+                        fi
+                      fi
+                      # Clean up the SBOM file after upload
+                      rm -f "${runsafe_sbom_file}" 2>/dev/null || true
+                    else
+                      echo "[RunSafe Security] Warning: Failed to generate SBOM for $image (image may not be available locally)"
+                    fi
+                  done < "$CAPTURE_FILE"
+                  echo "[RunSafe Security] Finished processing Docker images for SBOM generation"
+                  FINALIZE_RUNSAFE_AUDIT_URL="${RUNSAFE_SBOM_SERVER}/api/organizations/${RUNSAFE_ORG_ID}/audits/${RUNSAFE_DOCKER_AUDIT_ID}/finalize"
+                  if ! curl --fail -sS -L -X POST \
+                    -H "x-runsafe-license-key: ${RUNSAFE_LICENSE_KEY}" \
+                    -H "Accept: application/json" \
+                    -H "Content-Type: application/json" \
+                    "${FINALIZE_RUNSAFE_AUDIT_URL}" -o /dev/null; then
+                    echo "[RunSafe Security] Warning: Failed to finalize Docker image audit (finalize API returned an error). Please contact support@runsafesecurity.com."
+                  fi
+                fi
+              fi
+            fi
+          else
+            echo "[RunSafe Security] No Docker image capture file found or file is empty (RunSafe docker interceptor may not have been active or no docker images were created/used)."
+            echo "[RunSafe Security] If that is unexpected, please contact support@runsafesecurity.com."
+          fi
+        fi
+    - name: Runsafe Platform Cleanup
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        if [ ! -z "${RUNSAFE_DISABLED}" ]; then
+          echo "RunSafe protections disabled for this job";
+        else
+          if [ ! -z "$RUNSAFE_IDENTIFY_ENABLED" ]; then
+            if [ -f "${GITHUB_WORKSPACE}/${GITHUB_RUN_ID}.runsafe_saved_ld_preload.env" ]; then
+              echo "Restoring LD_PRELOAD...";
+              export LD_PRELOAD=$(cat ${GITHUB_WORKSPACE}/${GITHUB_RUN_ID}.runsafe_saved_ld_preload.env)
+              unset RUNSAFE_SAVED_LD_PRELOAD;
+            fi;
+            runsafe_sbom generate --output-file sbom-cpp-${RUNSAFE_SBOM_ID}.cdx.json
+            runsafe_sbom platform upload-sbom -i sbom-cpp*.cdx.json || echo "Failed to upload SBOM!"
+          fi;
+        fi;

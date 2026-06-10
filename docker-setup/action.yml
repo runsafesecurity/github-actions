@@ -1,0 +1,211 @@
+#
+# Bootstrap: uses RUNSAFE_SBOM_BOOTSTRAP/bin/runsafe_sbom (or RUNSAFE_SBOM_PACKAGES if
+# not present) for login and enabled-features only. Protect and Identify packages are
+# downloaded from packages.runsafesecurity.com in an OS-agnostic way (deb/rpm/apk);
+# install sets up paths (e.g. /usr/bin/alkemist/lfr/scripts) via GITHUB_PATH.
+#
+name: "Runsafe Docker Setup SBOM Action"
+description: "Setup Runsafe Platform for Docker"
+inputs:
+  license_key:
+    description: "Runsafe license key"
+    required: true
+    type: string
+runs:
+  using: "composite"
+
+  steps:
+    - name: List Github Env Vars
+      shell: bash
+      run: |
+        echo "GITHUB_REPOSITORY_ID: $GITHUB_REPOSITORY_ID"
+        echo "GITHUB_SHA: $GITHUB_SHA"
+        echo "GITHUB_SERVER_URL: $GITHUB_SERVER_URL"
+        echo "GITHUB_RUN_ID: $GITHUB_RUN_ID"
+        echo "GITHUB_REF_NAME: $GITHUB_REF_NAME"
+        echo "GITHUB_RUN_ATTEMPT: $GITHUB_RUN_ATTEMPT"
+    - name: Runsafe Platform Setup
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        RUNSAFE_SBOM_GENERATOR_VERSION: 2.9.2
+        RUNSAFE_PROTECT_VERSION: 5.8.2
+        RUNSAFE_SYFT_VERSION: 1.42.4
+      run: |
+        RUNSAFE_SERVER=https://app.runsafesecurity.com
+        if [ -z "${RUNSAFE_SBOM_SERVER}" ]; then export RUNSAFE_SBOM_SERVER=${RUNSAFE_SERVER}; fi
+        if [ -z "${RUNSAFE_LICENSE_SERVER}" ]; then export RUNSAFE_LICENSE_SERVER=${RUNSAFE_SERVER}; fi
+        echo "RUNSAFE_SBOM_GENERATOR_VERSION=${RUNSAFE_SBOM_GENERATOR_VERSION}" >> $GITHUB_ENV
+        echo "RUNSAFE_PROTECT_VERSION=${RUNSAFE_PROTECT_VERSION}" >> $GITHUB_ENV
+        echo "RUNSAFE_SYFT_VERSION=${RUNSAFE_SYFT_VERSION}" >> $GITHUB_ENV
+        echo "RUNSAFE_SBOM_SERVER=${RUNSAFE_SBOM_SERVER}" >> $GITHUB_ENV
+        echo "RUNSAFE_LICENSE_SERVER=${RUNSAFE_LICENSE_SERVER}" >> $GITHUB_ENV
+
+        RUNSAFE_LICENSE_KEY=${{ inputs.license_key }}
+        export RUNSAFE_LICENSE_KEY=${RUNSAFE_LICENSE_KEY}
+        echo "RUNSAFE_LICENSE_KEY=${RUNSAFE_LICENSE_KEY}" >> $GITHUB_ENV
+
+        RUNSAFE_FEATURES_ENABLED=$(curl -L -H "x-runsafe-license-key: ${RUNSAFE_LICENSE_KEY}" ${RUNSAFE_SBOM_SERVER}/api/external-repos/github/${GITHUB_REPOSITORY_ID}/enabled-features)
+        CURL_EXIT_CODE=$?
+        if [ $CURL_EXIT_CODE -ne 0 ]; then
+          echo "Error: Failed to fetch enabled features from Runsafe Platform (exit code $CURL_EXIT_CODE)"
+          exit 1
+        fi
+        export RUNSAFE_FEATURES_ENABLED
+        echo $RUNSAFE_FEATURES_ENABLED
+
+        cd ${GITHUB_WORKSPACE}
+
+        # Detect OS for package format
+        if [ -f /etc/os-release ]; then . /etc/os-release; fi
+        case "${ID:-}" in
+          ubuntu|debian) PKG_FMT=deb ;;
+          rhel|centos|rocky|fedora|amzn) PKG_FMT=rpm ;;
+          alpine) PKG_FMT=apk ;;
+          *) PKG_FMT=deb ;;
+        esac
+        if [[ $RUNSAFE_FEATURES_ENABLED == *"protect-source"* ]]; then
+          echo "Protect Source!";
+          mkdir -p RUNSAFE_PROTECT_SOURCE_PACKAGES
+          BASE_URL=https://packages.runsafesecurity.com/public/runsafe
+          if [ "$PKG_FMT" = deb ]; then
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-licensechecker_${RUNSAFE_PROTECT_VERSION}_amd64.deb ${BASE_URL}/deb/any-distro/pool/any-version/main/a/al/alkemist-lfr-licensechecker_${RUNSAFE_PROTECT_VERSION}/alkemist-lfr-licensechecker_${RUNSAFE_PROTECT_VERSION}_amd64.deb
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr_${RUNSAFE_PROTECT_VERSION}_amd64.deb ${BASE_URL}/deb/any-distro/pool/any-version/main/a/al/alkemist-lfr_${RUNSAFE_PROTECT_VERSION}/alkemist-lfr_${RUNSAFE_PROTECT_VERSION}_amd64.deb
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-liblfr-dev_${RUNSAFE_PROTECT_VERSION}_amd64.deb ${BASE_URL}/deb/any-distro/pool/any-version/main/a/al/alkemist-liblfr-dev_${RUNSAFE_PROTECT_VERSION}/alkemist-liblfr-dev_${RUNSAFE_PROTECT_VERSION}_amd64.deb
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-liblfr_${RUNSAFE_PROTECT_VERSION}_amd64.deb ${BASE_URL}/deb/any-distro/pool/any-version/main/a/al/alkemist-liblfr_${RUNSAFE_PROTECT_VERSION}/alkemist-liblfr_${RUNSAFE_PROTECT_VERSION}_amd64.deb
+          elif [ "$PKG_FMT" = rpm ]; then
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm ${BASE_URL}/rpm/any-distro/any-version/x86_64/alkemist-lfr-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-liblfr-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm ${BASE_URL}/rpm/any-distro/any-version/x86_64/alkemist-lfr-liblfr-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-liblfr-${RUNSAFE_PROTECT_VERSION}-1.i386.rpm ${BASE_URL}/rpm/any-distro/any-version/i386/alkemist-lfr-liblfr-${RUNSAFE_PROTECT_VERSION}-1.i386.rpm
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-liblfr-dev-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm ${BASE_URL}/rpm/any-distro/any-version/x86_64/alkemist-lfr-liblfr-dev-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-liblfr-dev-${RUNSAFE_PROTECT_VERSION}-1.i386.rpm ${BASE_URL}/rpm/any-distro/any-version/i386/alkemist-lfr-liblfr-dev-${RUNSAFE_PROTECT_VERSION}-1.i386.rpm
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-licensechecker-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm ${BASE_URL}/rpm/any-distro/any-version/x86_64/alkemist-lfr-licensechecker-${RUNSAFE_PROTECT_VERSION}-1.x86_64.rpm
+          elif [ "$PKG_FMT" = apk ]; then
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-${RUNSAFE_PROTECT_VERSION}-r0.apk ${BASE_URL}/alpine/any-version/main/x86_64/alkemist-lfr-${RUNSAFE_PROTECT_VERSION}-r0.apk
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-lfr-licensechecker-${RUNSAFE_PROTECT_VERSION}-r0.apk ${BASE_URL}/alpine/any-version/main/x86_64/alkemist-lfr-licensechecker-${RUNSAFE_PROTECT_VERSION}-r0.apk
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-liblfr-${RUNSAFE_PROTECT_VERSION}-r0.apk ${BASE_URL}/alpine/any-version/main/x86_64/alkemist-liblfr-${RUNSAFE_PROTECT_VERSION}-r0.apk
+            curl -L -o RUNSAFE_PROTECT_SOURCE_PACKAGES/alkemist-liblfr-dev-${RUNSAFE_PROTECT_VERSION}-r0.apk ${BASE_URL}/alpine/any-version/main/x86_64/alkemist-liblfr-dev-${RUNSAFE_PROTECT_VERSION}-r0.apk
+          fi
+          export RUNSAFE_PROTECT_SOURCE_ENABLED=1
+          echo "RUNSAFE_PROTECT_SOURCE_ENABLED=${RUNSAFE_PROTECT_SOURCE_ENABLED}" >> $GITHUB_ENV
+        fi
+
+        if [[ $RUNSAFE_FEATURES_ENABLED == *"identify"* ]]; then
+          echo "Identify!";
+          mkdir -p RUNSAFE_SBOM_PACKAGES
+          curl -L -s https://packages.runsafesecurity.com/public/runsafe/raw/versions/${RUNSAFE_SBOM_GENERATOR_VERSION}/download_runsafe_sbom_packages.sh -o download_runsafe_sbom_packages.sh
+          chmod +x download_runsafe_sbom_packages.sh
+          cd RUNSAFE_SBOM_PACKAGES
+          ../download_runsafe_sbom_packages.sh
+          mkdir -p bin
+          curl -L -o bin/runsafe_sbom https://packages.runsafesecurity.com/public/runsafe/raw/versions/${RUNSAFE_SBOM_GENERATOR_VERSION}/runsafe_sbom
+          chmod +x bin/runsafe_sbom
+          chmod +x scripts/*.sh 2>/dev/null || true
+          cd ..
+          ${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin/runsafe_sbom platform start-scan
+          export RUNSAFE_AUDIT_ID=$(${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin/runsafe_sbom platform start-audit)
+          export RUNSAFE_RET_CODE=$?
+          if [ -z "${RUNSAFE_AUDIT_ID}" ]; then echo Error creating RUNSAFE_AUDIT_ID, exiting...; exit 1; fi
+          export RUNSAFE_SBOM_SERVER_NO_PREFIX=${RUNSAFE_SBOM_SERVER#*//}
+          echo "RUNSAFE_SBOM_SERVER_NO_PREFIX=${RUNSAFE_SBOM_SERVER_NO_PREFIX}" >> $GITHUB_ENV
+          echo "RUNSAFE_AUDIT_ID=${RUNSAFE_AUDIT_ID}" >> $GITHUB_ENV
+          export RUNSAFE_IDENTIFY_ENABLED=1
+          echo "RUNSAFE_IDENTIFY_ENABLED=${RUNSAFE_IDENTIFY_ENABLED}" >> $GITHUB_ENV
+          RUNSAFE_ORG_ID=$(curl --fail -s -L -H "x-runsafe-license-key: ${RUNSAFE_LICENSE_KEY}" "${RUNSAFE_SBOM_SERVER}/api/organizations/current-organization-id" || true)
+          if [ -z "${RUNSAFE_ORG_ID}" ]; then
+            echo "[RunSafe Security] Error: Could not obtain RUNSAFE_ORG_ID (empty response). Please contact support@runsafesecurity.com."
+          fi
+          echo "[RunSafe Security] RUNSAFE_ORG_ID=$RUNSAFE_ORG_ID"
+          echo "RUNSAFE_ORG_ID=${RUNSAFE_ORG_ID}" >> $GITHUB_ENV
+        fi
+
+        if [ ! -z "${RUNSAFE_DISABLED}" ]; then
+          echo "RunSafe protections disabled for this job";
+        else
+          if [ -z "${RUNSAFE_AUDIT_ID}" ]; then
+            echo No RUNSAFE_AUDIT_ID, disabling RunSafe C/C++ SBOM tool...;
+            export RUNSAFE_SBOM_DISABLED=1;
+          else
+            if [ ! -z "$RUNSAFE_PROTECT_SOURCE_ENABLED" ]; then
+              sh -c 'cd ${GITHUB_WORKSPACE}/RUNSAFE_PROTECT_SOURCE_PACKAGES; (sudo apt-get update && sudo apt-get install -y ./*.deb) || (apt-get update && apt-get install -y ./*.deb) || (sudo yum localinstall -y *.rpm || yum localinstall -y *.rpm) || (sudo dnf install -y ./*.rpm || dnf install -y ./*.rpm) || (sudo apk add --allow-untrusted *.apk || apk add --allow-untrusted *.apk)'
+              echo "/usr/bin/alkemist/lfr/scripts" >> $GITHUB_PATH
+            fi;
+            if [ ! -z "$RUNSAFE_IDENTIFY_ENABLED" ]; then
+              export RUNSAFE_ROOT_PATH=${GITHUB_WORKSPACE};
+              echo "RUNSAFE_ROOT_PATH=${RUNSAFE_ROOT_PATH}" >> $GITHUB_ENV
+              sh -c 'cd ${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES; ./scripts/install_packages.sh';
+              export RUNSAFE_SBOM_ID=$(runsafe_sbom platform start-sbom);
+              export RUNSAFE_RET_CODE=$?;
+              echo "RUNSAFE_RET_CODE=${RUNSAFE_RET_CODE}" >> $GITHUB_ENV;
+              echo RUNSAFE_SBOM_ID=${RUNSAFE_SBOM_ID};
+              echo "RUNSAFE_SBOM_ID=${RUNSAFE_SBOM_ID}" >> $GITHUB_ENV;
+              runsafe_sbom login && runsafe_sbom service start;
+              echo ${LD_PRELOAD} > ${GITHUB_WORKSPACE}/${GITHUB_RUN_ID}.runsafe_saved_ld_preload.env;
+              export LD_PRELOAD=librunsafe_sbom.so.${RUNSAFE_SBOM_GENERATOR_VERSION}:${LD_PRELOAD};
+              echo "LD_PRELOAD=${LD_PRELOAD}" >> $GITHUB_ENV
+              if [[ "${RUNSAFE_SBOM_LOG_LEVEL}" == "debug" ]]; then
+                echo "Setting LD_DEBUG=libs for debug logging";
+                export LD_DEBUG=libs;
+                echo "LD_DEBUG=${LD_DEBUG}" >> $GITHUB_ENV;
+              fi
+            fi;
+          fi
+        fi;
+    - name: Runsafe Docker Platform Setup - Linux
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        if [ ! -z "${RUNSAFE_DISABLED}" ]; then
+          echo "[RunSafe Security] RunSafe protections disabled for this job";
+        elif [ -z "${RUNSAFE_IDENTIFY_ENABLED}" ]; then
+          echo "[RunSafe Security] RunSafe docker setup skipped for this job. Are you sure that Identify is enabled for this project?";
+          echo "[RunSafe Security] If that does not resolve the issue, please contact support@runsafesecurity.com."
+        else
+          CAPTURE_FILE="${GITHUB_WORKSPACE}/.docker_images_captured/${GITHUB_RUN_ID}_built_images.txt"
+          RUNSAFE_DOCKER_IMAGES_CAPTURE_FILE=${CAPTURE_FILE}
+          echo "RUNSAFE_DOCKER_IMAGES_CAPTURE_FILE=${CAPTURE_FILE}" >> "$GITHUB_ENV"
+          echo "RUNSAFE_DOCKER_IMAGES_CAPTURE_FILE=${RUNSAFE_DOCKER_IMAGES_CAPTURE_FILE}" >> "$GITHUB_ENV"
+
+          curl -L -f -o syft_${RUNSAFE_SYFT_VERSION}_linux_amd64.tar.gz https://github.com/anchore/syft/releases/download/v${RUNSAFE_SYFT_VERSION}/syft_${RUNSAFE_SYFT_VERSION}_linux_amd64.tar.gz && \
+          mkdir -p ${GITHUB_WORKSPACE}/syft_${RUNSAFE_SYFT_VERSION}_linux_amd64 && \
+          tar -xzf syft_${RUNSAFE_SYFT_VERSION}_linux_amd64.tar.gz -C ${GITHUB_WORKSPACE}/syft_${RUNSAFE_SYFT_VERSION}_linux_amd64 && \
+          mkdir -p ${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin && \
+          mv ${GITHUB_WORKSPACE}/syft_${RUNSAFE_SYFT_VERSION}_linux_amd64/syft ${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin/ && \
+          chmod +x ${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin/syft && \
+          # Only delete the tarball but keep the extracted directory to keep the license file
+          rm ${GITHUB_WORKSPACE}/syft_${RUNSAFE_SYFT_VERSION}_linux_amd64.tar.gz
+
+          # Setup Docker image interceptor to capture all built/pulled images
+          if command -v docker >/dev/null 2>&1 || command -v podman >/dev/null 2>&1; then
+            mkdir -p ${GITHUB_WORKSPACE}/.runsafe_docker_interceptor
+            cp ${{ github.action_path }}/bin/docker-image-interceptor.sh "${GITHUB_WORKSPACE}/.runsafe_docker_interceptor/docker-image-interceptor.sh"
+            chmod +x "${GITHUB_WORKSPACE}/.runsafe_docker_interceptor/docker-image-interceptor.sh"
+            # Save real binary paths before modifying PATH
+            if command -v docker >/dev/null 2>&1; then
+              export RUNSAFE_REAL_DOCKER_PATH=$(command -v docker)
+              echo "RUNSAFE_REAL_DOCKER_PATH=${RUNSAFE_REAL_DOCKER_PATH}" >> "$GITHUB_ENV"
+              ln -sf ${GITHUB_WORKSPACE}/.runsafe_docker_interceptor/docker-image-interceptor.sh ${GITHUB_WORKSPACE}/.runsafe_docker_interceptor/docker
+            fi
+            if command -v podman >/dev/null 2>&1; then
+              export RUNSAFE_REAL_PODMAN_PATH=$(command -v podman)
+              echo "RUNSAFE_REAL_PODMAN_PATH=${RUNSAFE_REAL_PODMAN_PATH}" >> "$GITHUB_ENV"
+              ln -sf ${GITHUB_WORKSPACE}/.runsafe_docker_interceptor/docker-image-interceptor.sh ${GITHUB_WORKSPACE}/.runsafe_docker_interceptor/podman
+            fi
+            # Add interceptor directory to PATH (prepend so it's found first)
+            export PATH=${GITHUB_WORKSPACE}/.runsafe_docker_interceptor:${PATH}
+            echo "${GITHUB_WORKSPACE}/.runsafe_docker_interceptor" >> "$GITHUB_PATH"
+            echo "[RunSafe Security] Docker image interceptor installed and active"
+            if command -v docker >/dev/null 2>&1; then
+              echo "[RunSafe Security] docker -> $(command -v docker)"
+            fi
+            if command -v podman >/dev/null 2>&1; then
+              echo "[RunSafe Security] podman -> $(command -v podman)"
+            fi
+          fi
+        fi
+    - name: Runsafe Docker Platform Setup - Windows
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        echo "Docker SBOM generation is not supported on Windows yet. Please contact support@runsafesecurity.com to inquire about adding support."
+        exit 1;
