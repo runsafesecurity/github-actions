@@ -1,4 +1,4 @@
-name: "Runsafe Docker Platform Cleanup - Linux"
+name: "Runsafe Docker Platform Cleanup"
 description: "Cleanup Runsafe Platform for Docker"
 runs:
   using: "composite"
