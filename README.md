@@ -475,14 +475,7 @@ jobs:
 
 ### Configuration
 
-The metadata component at the top of the CycloneDX SBOM can be configured by setting these environment variables on the build job:
-
-| Variable | Description | Default |
-| --- | --- | --- |
-| `RUNSAFE_SBOM_METADATA_COMPONENT_NAME` | Name of the software or firmware being built | `yocto-image` |
-| `RUNSAFE_SBOM_METADATA_COMPONENT_VERSION` | Version of the software or firmware being built | `1.0.0` |
-| `RUNSAFE_SBOM_METADATA_COMPONENT_SUPPLIER` | Name of the supplier | `Organization: OpenEmbedded ()` |
-| `RUNSAFE_OFFLINE_ONLY` | Restrict communication to on-device only (`1` to enable) | `0` |
+For SBOM metadata and other Yocto-specific options, see the [`meta-runsafe-sbom` README](https://gitlab.com/runsafe-foss/meta-runsafe-sbom).
 
 ### Debug
 
