@@ -1,0 +1,69 @@
+name: "Runsafe Yocto Setup SBOM Action"
+description: "Setup Runsafe Platform for Yocto"
+inputs:
+  license_key:
+    description: "Runsafe license key"
+    required: true
+    type: string
+runs:
+  using: "composite"
+
+  steps:
+    - name: List Github Env Vars
+      shell: bash
+      run: |
+        echo "GITHUB_REPOSITORY_ID: $GITHUB_REPOSITORY_ID"
+        echo "GITHUB_SHA: $GITHUB_SHA"
+        echo "GITHUB_SERVER_URL: $GITHUB_SERVER_URL"
+        echo "GITHUB_RUN_ID: $GITHUB_RUN_ID"
+        echo "GITHUB_REF_NAME: $GITHUB_REF_NAME"
+        echo "GITHUB_RUN_ATTEMPT: $GITHUB_RUN_ATTEMPT"
+    - name: Runsafe Platform Setup
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        RUNSAFE_SBOM_GENERATOR_VERSION: 2.9.2
+      run: |
+        RUNSAFE_SERVER=https://app.runsafesecurity.com
+        if [ -z "${RUNSAFE_SBOM_SERVER}" ]; then export RUNSAFE_SBOM_SERVER=${RUNSAFE_SERVER}; fi
+        if [ -z "${RUNSAFE_LICENSE_SERVER}" ]; then export RUNSAFE_LICENSE_SERVER=${RUNSAFE_SERVER}; fi
+        echo "RUNSAFE_SBOM_GENERATOR_VERSION=${RUNSAFE_SBOM_GENERATOR_VERSION}" >> $GITHUB_ENV
+        echo "RUNSAFE_SBOM_SERVER=${RUNSAFE_SBOM_SERVER}" >> $GITHUB_ENV
+        echo "RUNSAFE_LICENSE_SERVER=${RUNSAFE_LICENSE_SERVER}" >> $GITHUB_ENV
+
+        RUNSAFE_LICENSE_KEY=${{ inputs.license_key }}
+        export RUNSAFE_LICENSE_KEY=${RUNSAFE_LICENSE_KEY}
+        echo "RUNSAFE_LICENSE_KEY=${RUNSAFE_LICENSE_KEY}" >> $GITHUB_ENV
+
+        RUNSAFE_FEATURES_ENABLED=$(curl -L -H "x-runsafe-license-key: ${RUNSAFE_LICENSE_KEY}" ${RUNSAFE_SBOM_SERVER}/api/external-repos/github/${GITHUB_REPOSITORY_ID}/enabled-features)
+        CURL_EXIT_CODE=$?
+        if [ $CURL_EXIT_CODE -ne 0 ]; then
+          echo "Error: Failed to fetch enabled features from Runsafe Platform (exit code $CURL_EXIT_CODE)"
+          exit 1
+        fi
+        export RUNSAFE_FEATURES_ENABLED
+        
+        cd ${GITHUB_WORKSPACE}
+
+        if [[ $RUNSAFE_FEATURES_ENABLED == *"identify"* ]]; then
+          echo "Identify!";
+          mkdir -p RUNSAFE_SBOM_PACKAGES/bin
+          cd RUNSAFE_SBOM_PACKAGES
+          curl -L -o bin/runsafe_sbom https://packages.runsafesecurity.com/public/runsafe/raw/versions/${RUNSAFE_SBOM_GENERATOR_VERSION}/runsafe_sbom
+          chmod +x bin/runsafe_sbom
+          cd ..
+          ${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin/runsafe_sbom platform start-scan
+          export RUNSAFE_AUDIT_ID=$(${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin/runsafe_sbom platform start-audit)
+          export RUNSAFE_RET_CODE=$?
+          if [ -z "${RUNSAFE_AUDIT_ID}" ]; then echo Error creating RUNSAFE_AUDIT_ID, exiting...; exit 1; fi
+          echo "RUNSAFE_AUDIT_ID=${RUNSAFE_AUDIT_ID}" >> $GITHUB_ENV
+          export RUNSAFE_IDENTIFY_ENABLED=1
+          echo "RUNSAFE_IDENTIFY_ENABLED=${RUNSAFE_IDENTIFY_ENABLED}" >> $GITHUB_ENV
+          RUNSAFE_ORG_ID=$(curl --fail -s -L -H "x-runsafe-license-key: ${RUNSAFE_LICENSE_KEY}" "${RUNSAFE_SBOM_SERVER}/api/organizations/current-organization-id" || true)
+          if [ -z "${RUNSAFE_ORG_ID}" ]; then
+            echo "[RunSafe Security] Error: Could not obtain RUNSAFE_ORG_ID (empty response). Please contact support@runsafesecurity.com."
+          fi
+          echo "[RunSafe Security] RUNSAFE_ORG_ID=$RUNSAFE_ORG_ID"
+          echo "RUNSAFE_ORG_ID=${RUNSAFE_ORG_ID}" >> $GITHUB_ENV
+          echo "${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin" >> $GITHUB_PATH
+        fi

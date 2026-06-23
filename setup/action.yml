@@ -21,8 +21,8 @@ runs:
     - name: Runsafe Platform Setup
       shell: bash
       env:
-        RUNSAFE_SBOM_GENERATOR_VERSION: 2.7.0
-        RUNSAFE_PROTECT_VERSION: 5.3.5
+        RUNSAFE_SBOM_GENERATOR_VERSION: 2.9.2
+        RUNSAFE_PROTECT_VERSION: 5.8.2
       run: |
         RUNSAFE_SERVER=https://app.runsafesecurity.com
         if [ -z "${RUNSAFE_SBOM_SERVER}" ]; then export RUNSAFE_SBOM_SERVER=${RUNSAFE_SERVER}; fi
