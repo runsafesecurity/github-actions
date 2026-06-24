@@ -42,12 +42,6 @@ runs:
                 # Ensure output directory exists
                 mkdir -p "${GITHUB_WORKSPACE}/.docker_images_captured" 2>/dev/null || true
 
-                RUNSAFE_DOCKER_AUDIT_ID=$(curl --fail -s -L -X POST \
-                  -H "x-runsafe-license-key: ${RUNSAFE_LICENSE_KEY}" \
-                  -H "Accept: application/json" \
-                  -H "Content-Type: application/json" \
-                  -d "{\"source\":\"GitHub\",\"language\":\"docker\",\"serverUrl\":\"${GITHUB_SERVER_URL}\",\"pipelineId\":\"${GITHUB_RUN_ID}\",\"fullRepo\":\"${GITHUB_REPOSITORY_ID}\",\"sha\":\"${GITHUB_SHA}\",\"ref\":\"${GITHUB_REF_NAME}\"}" \
-                  "${RUNSAFE_SBOM_SERVER}/api/organizations/${RUNSAFE_ORG_ID}/audits" || true)
                 if [ -z "${RUNSAFE_DOCKER_AUDIT_ID}" ]; then
                   echo "[RunSafe Security] Error: Could not obtain RUNSAFE_DOCKER_AUDIT_ID from start-audit (curl may have failed). Please review the RunSafe Gremlin Setup step for any errors. Contact support@runsafesecurity.com if you need assistance."
                 else
@@ -134,20 +128,3 @@ runs:
             echo "[RunSafe Security] If that is unexpected, please contact support@runsafesecurity.com."
           fi
         fi
-    - name: Runsafe Platform Cleanup
-      if: runner.os == 'Linux'
-      shell: bash
-      run: |
-        if [ ! -z "${RUNSAFE_DISABLED}" ]; then
-          echo "RunSafe protections disabled for this job";
-        else
-          if [ ! -z "$RUNSAFE_IDENTIFY_ENABLED" ]; then
-            if [ -f "${GITHUB_WORKSPACE}/${GITHUB_RUN_ID}.runsafe_saved_ld_preload.env" ]; then
-              echo "Restoring LD_PRELOAD...";
-              export LD_PRELOAD=$(cat ${GITHUB_WORKSPACE}/${GITHUB_RUN_ID}.runsafe_saved_ld_preload.env)
-              unset RUNSAFE_SAVED_LD_PRELOAD;
-            fi;
-            runsafe_sbom generate --output-file sbom-cpp-${RUNSAFE_SBOM_ID}.cdx.json
-            runsafe_sbom platform upload-sbom -i sbom-cpp*.cdx.json || echo "Failed to upload SBOM!"
-          fi;
-        fi;

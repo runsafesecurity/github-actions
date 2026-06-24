@@ -28,14 +28,8 @@ else
             fi
             mkdir -p "${GITHUB_WORKSPACE}/.dotnet_projects_captured" 2>/dev/null || true
 
-            RUNSAFE_DOTNET_AUDIT_ID=$(curl --fail -s -L -X POST \
-                -H "x-runsafe-license-key: ${RUNSAFE_LICENSE_KEY}" \
-                -H "Accept: application/json" \
-                -H "Content-Type: application/json" \
-                -d "{\"source\":\"GitHub\",\"language\":\"dotnet\",\"serverUrl\":\"${GITHUB_SERVER_URL}\",\"pipelineId\":\"${GITHUB_RUN_ID}\",\"fullRepo\":\"${GITHUB_REPOSITORY_ID}\",\"sha\":\"${GITHUB_SHA}\",\"ref\":\"${GITHUB_REF_NAME}\"}" \
-                "${RUNSAFE_SBOM_SERVER}/api/organizations/${RUNSAFE_ORG_ID}/audits" || true)
             if [ -z "${RUNSAFE_DOTNET_AUDIT_ID}" ]; then
-                echo "[RunSafe Security] Error: Could not obtain RUNSAFE_DOTNET_AUDIT_ID from start-audit (curl may have failed). Please review the RunSafe Gremlin Setup step for any errors. Contact support@runsafesecurity.com if you need assistance."
+                echo "[RunSafe Security] Error: Could not obtain RUNSAFE_DOTNET_AUDIT_ID from start-audit (curl may have failed). Please review the RunSafe Platform Setup step for any errors. Contact support@runsafesecurity.com if you need assistance."
             else
                 while IFS= read -r scan_root || [ -n "$scan_root" ]; do
                   scan_root=$(echo "$scan_root" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
@@ -85,7 +79,7 @@ else
                         "${RUNSAFE_SBOM_SERVER}/api/organizations/${RUNSAFE_ORG_ID}/audits/${RUNSAFE_DOTNET_AUDIT_ID}/start-sbom" || true)
 
                       if [ -z "${RUNSAFE_TEMP_SBOM_ID}" ]; then
-                        echo "[RunSafe Security] Warning: Could not obtain SBOM ID from start-sbom for $runsafe_scan_file_path (empty response; curl may have failed). Skipping upload for this path. Please review the RunSafe Gremlin Setup step for any errors. Contact support@runsafesecurity.com if you need assistance."
+                        echo "[RunSafe Security] Warning: Could not obtain SBOM ID from start-sbom for $runsafe_scan_file_path (empty response; curl may have failed). Skipping upload for this path. Please review the RunSafe Platform Setup step for any errors. Contact support@runsafesecurity.com if you need assistance."
                       else
                         RUNSAFE_HASH=$(sha256sum "${runsafe_sbom_file}" | cut -d' ' -f1)
                         runsafe_project_encoded=$(awk -v s="$runsafe_scan_file_path" 'BEGIN {

@@ -74,36 +74,6 @@ if (-not (Get-Command curl.exe -CommandType Application -ErrorAction SilentlyCon
 
 $outputDir = Join-Path $env:GITHUB_WORKSPACE '.dotnet_projects_captured'
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
-$auditJson = (@{
-        source     = 'GitHub'
-        language   = 'dotnet'
-        serverUrl  = $env:GITHUB_SERVER_URL
-        pipelineId = $env:GITHUB_RUN_ID
-        fullRepo   = $env:GITHUB_REPOSITORY_ID
-        sha        = $env:GITHUB_SHA
-        ref        = $env:GITHUB_REF_NAME
-    } | ConvertTo-Json -Compress)
-
-$auditBodyFile = Join-Path $env:TEMP "runsafe-dotnet-audit-$($env:GITHUB_RUN_ID).json"
-Set-Content -LiteralPath $auditBodyFile -Value $auditJson -Encoding utf8
-
-$auditUrl = "$($env:RUNSAFE_SBOM_SERVER)/api/organizations/$($env:RUNSAFE_ORG_ID)/audits"
-$auditResponse = & curl.exe --fail -s -L -X POST `
-    -H "x-runsafe-license-key: $($env:RUNSAFE_LICENSE_KEY)" `
-    -H 'Accept: application/json' `
-    -H 'Content-Type: application/json' `
-    --data-binary "@$auditBodyFile" `
-    $auditUrl 2>$null
-
-Remove-Item -LiteralPath $auditBodyFile -Force -ErrorAction SilentlyContinue
-
-if (-not $auditResponse) {
-    Write-Host '[RunSafe Security] Error: Could not obtain RUNSAFE_DOTNET_AUDIT_ID from start-audit (curl may have failed). Please review the RunSafe Gremlin Setup step for any errors. Contact support@runsafesecurity.com if you need assistance.'
-    exit 0
-}
-
-# Plain-text UUID from API; strip BOM/CRLF that Windows curl can surface on stdout.
-$dotnetAuditId = ($auditResponse.Trim() -replace '^\uFEFF', '').Trim().Trim('"')
 
 foreach ($line in Get-Content -LiteralPath $captureFile) {
     $scanRoot = $line.Trim()
@@ -161,7 +131,7 @@ foreach ($line in Get-Content -LiteralPath $captureFile) {
 
     Write-Host "[RunSafe Security] Successfully generated SBOM for $runsafeScanFilePath"
 
-    $startSbomUrl = "$($env:RUNSAFE_SBOM_SERVER)/api/organizations/$($env:RUNSAFE_ORG_ID)/audits/$dotnetAuditId/start-sbom"
+    $startSbomUrl = "$($env:RUNSAFE_SBOM_SERVER)/api/organizations/$($env:RUNSAFE_ORG_ID)/audits/$($env:RUNSAFE_DOTNET_AUDIT_ID)/start-sbom"
     # Do not use curl.exe `-d ''` here: PowerShell often passes it incorrectly so curl treats the URL as --data (empty stdout + --fail). POST with no body matches bash `curl ... -d ""`.
     $sbomIdResponse = & curl.exe @(
         '--fail', '-s', '-L', '-X', 'POST',
@@ -170,7 +140,7 @@ foreach ($line in Get-Content -LiteralPath $captureFile) {
     ) 2>$null
 
     if (-not $sbomIdResponse) {
-        Write-Host "[RunSafe Security] Warning: Could not obtain SBOM ID from start-sbom for $runsafeScanFilePath (empty response; curl may have failed). Skipping upload for this path. Please review the RunSafe Gremlin Setup step for any errors. Contact support@runsafesecurity.com if you need assistance."
+        Write-Host "[RunSafe Security] Warning: Could not obtain SBOM ID from start-sbom for $runsafeScanFilePath (empty response; curl may have failed). Skipping upload for this path. Please review the RunSafe Platform Setup step for any errors. Contact support@runsafesecurity.com if you need assistance."
         continue
     }
 
@@ -178,7 +148,7 @@ foreach ($line in Get-Content -LiteralPath $captureFile) {
     $hash = (Get-FileHash -LiteralPath $sbomFile -Algorithm SHA256).Hash.ToLowerInvariant()
     $encodedPath = Encode-RunSafePathSegment -Value $runsafeScanFilePath
 
-    $uploadUrl = "$($env:RUNSAFE_SBOM_SERVER)/api/organizations/$($env:RUNSAFE_ORG_ID)/audits/$dotnetAuditId/sboms/$tempSbomId" +
+    $uploadUrl = "$($env:RUNSAFE_SBOM_SERVER)/api/organizations/$($env:RUNSAFE_ORG_ID)/audits/$($env:RUNSAFE_DOTNET_AUDIT_ID)/sboms/$tempSbomId" +
         "?hash=$hash&status=complete&filePath=$encodedPath"
 
     # curl -v writes diagnostics to stderr; merge to stdout so GitHub shows it in the job log.
@@ -201,11 +171,12 @@ foreach ($line in Get-Content -LiteralPath $captureFile) {
 
 Write-Host '[RunSafe Security] Finished processing .NET projects for SBOM generation'
 
-$finalizeUrl = "$($env:RUNSAFE_SBOM_SERVER)/api/organizations/$($env:RUNSAFE_ORG_ID)/audits/$dotnetAuditId/finalize"
+$finalizeUrl = "$($env:RUNSAFE_SBOM_SERVER)/api/organizations/$($env:RUNSAFE_ORG_ID)/audits/$($env:RUNSAFE_DOTNET_AUDIT_ID)/finalize"
 & curl.exe --fail -sS -L -X POST `
     -H "x-runsafe-license-key: $($env:RUNSAFE_LICENSE_KEY)" `
     -H 'Accept: application/json' `
     -H 'Content-Type: application/json' `
+    -H 'Content-Length: 0' `
     $finalizeUrl -o NUL 2>$null
 
 if ($LASTEXITCODE -ne 0) {
