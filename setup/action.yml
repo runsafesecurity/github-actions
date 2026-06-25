@@ -1,3 +1,9 @@
+#
+# Bootstrap: uses RUNSAFE_SBOM_BOOTSTRAP/bin/runsafe_sbom (or RUNSAFE_SBOM_PACKAGES if
+# not present) for login and enabled-features only. Protect and Identify packages are
+# downloaded from packages.runsafesecurity.com in an OS-agnostic way (deb/rpm/apk);
+# install sets up paths (e.g. /usr/bin/alkemist/lfr/scripts) via GITHUB_PATH.
+#
 name: "Runsafe Setup SBOM Action"
 description: "Setup Runsafe Platform"
 inputs:
@@ -102,6 +108,12 @@ runs:
           echo "RUNSAFE_AUDIT_ID=${RUNSAFE_AUDIT_ID}" >> $GITHUB_ENV
           export RUNSAFE_IDENTIFY_ENABLED=1
           echo "RUNSAFE_IDENTIFY_ENABLED=${RUNSAFE_IDENTIFY_ENABLED}" >> $GITHUB_ENV
+          RUNSAFE_ORG_ID=$(curl --fail -s -L -H "x-runsafe-license-key: ${RUNSAFE_LICENSE_KEY}" "${RUNSAFE_SBOM_SERVER}/api/organizations/current-organization-id" || true)
+          if [ -z "${RUNSAFE_ORG_ID}" ]; then
+            echo "[RunSafe Security] Error: Could not obtain RUNSAFE_ORG_ID (empty response). Please contact support@runsafesecurity.com."
+          fi
+          echo "[RunSafe Security] RUNSAFE_ORG_ID=$RUNSAFE_ORG_ID"
+          echo "RUNSAFE_ORG_ID=${RUNSAFE_ORG_ID}" >> $GITHUB_ENV
         fi
 
         if [ ! -z "${RUNSAFE_DISABLED}" ]; then

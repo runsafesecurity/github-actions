@@ -15,23 +15,6 @@ runs:
         echo "${GITHUB_WORKSPACE}/.runsafe_dotnet_interceptor" >> "$GITHUB_PATH"
 
         . ${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin/dotnet-gremlin-cleanup.sh
-    - name: Runsafe Platform Cleanup
-      if: runner.os == 'Linux'
-      shell: bash
-      run: |
-        if [ ! -z "${RUNSAFE_DISABLED}" ]; then
-          echo "RunSafe protections disabled for this job";
-        else
-          if [ ! -z "$RUNSAFE_IDENTIFY_ENABLED" ]; then
-            if [ -f "${GITHUB_WORKSPACE}/${GITHUB_RUN_ID}.runsafe_saved_ld_preload.env" ]; then
-              echo "Restoring LD_PRELOAD...";
-              export LD_PRELOAD=$(cat ${GITHUB_WORKSPACE}/${GITHUB_RUN_ID}.runsafe_saved_ld_preload.env)
-              unset RUNSAFE_SAVED_LD_PRELOAD;
-            fi;
-            runsafe_sbom generate --output-file sbom-cpp-${RUNSAFE_SBOM_ID}.cdx.json
-            runsafe_sbom platform upload-sbom -i sbom-cpp*.cdx.json || echo "Failed to upload SBOM!"
-          fi;
-        fi;
     - name: Runsafe .NET Platform Cleanup - Windows
       if: runner.os == 'Windows'
       shell: pwsh
