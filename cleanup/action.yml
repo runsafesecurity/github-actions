@@ -4,6 +4,7 @@ runs:
   using: "composite"
   steps:
     - name: Runsafe Platform Cleanup
+      if: github.event_name != 'schedule'
       shell: bash
       run: |
         if [ ! -z "${RUNSAFE_DISABLED}" ]; then

@@ -16,6 +16,7 @@ runs:
 
   steps:
     - name: List Github Env Vars
+      if: github.event_name != 'schedule'
       shell: bash
       run: |
         echo "GITHUB_REPOSITORY_ID: $GITHUB_REPOSITORY_ID"
@@ -25,7 +26,7 @@ runs:
         echo "GITHUB_REF_NAME: $GITHUB_REF_NAME"
         echo "GITHUB_RUN_ATTEMPT: $GITHUB_RUN_ATTEMPT"
     - name: Runsafe Platform Setup
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && github.event_name != 'schedule'
       shell: bash
       env:
         RUNSAFE_SBOM_GENERATOR_VERSION: 2.9.2
@@ -90,7 +91,7 @@ runs:
           echo "RUNSAFE_DOTNET_AUDIT_ID=${RUNSAFE_DOTNET_AUDIT_ID}" >> $GITHUB_ENV
         fi
     - name: Runsafe .NET Platform Setup - Linux
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && github.event_name != 'schedule'
       shell: bash
       run: |
         curl -L -f -o syft_${RUNSAFE_SYFT_VERSION}_linux_amd64.tar.gz https://github.com/anchore/syft/releases/download/v${RUNSAFE_SYFT_VERSION}/syft_${RUNSAFE_SYFT_VERSION}_linux_amd64.tar.gz && \
@@ -114,7 +115,7 @@ runs:
         cp ${{ github.action_path }}/bin/* "${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin/"
         . "${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin/dotnet-gremlin-setup.sh"
     - name: Runsafe Platform Setup
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && github.event_name != 'schedule'
       shell: bash
       env:
         RUNSAFE_SBOM_GENERATOR_VERSION: 2.9.2
@@ -182,7 +183,7 @@ runs:
           echo "RUNSAFE_DOTNET_AUDIT_ID=${RUNSAFE_DOTNET_AUDIT_ID}" >> $GITHUB_ENV
         fi
     - name: Runsafe .NET Platform Setup - Windows
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && github.event_name != 'schedule'
       shell: pwsh
       run: |
         $packagesBin = Join-Path $env:GITHUB_WORKSPACE 'RUNSAFE_SBOM_PACKAGES\bin'
