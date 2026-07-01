@@ -4,7 +4,7 @@ runs:
   using: "composite"
   steps:
     - name: Runsafe Docker Platform Cleanup - Linux
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && github.event_name != 'schedule'
       shell: bash
       run: |
         CAPTURE_FILE="${GITHUB_WORKSPACE}/.docker_images_captured/${GITHUB_RUN_ID}_built_images.txt"

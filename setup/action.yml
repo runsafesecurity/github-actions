@@ -16,6 +16,7 @@ runs:
 
   steps:
     - name: List Github Env Vars
+      if: github.event_name != 'schedule'
       shell: bash
       run: |
         echo "GITHUB_REPOSITORY_ID: $GITHUB_REPOSITORY_ID"
@@ -25,6 +26,7 @@ runs:
         echo "GITHUB_REF_NAME: $GITHUB_REF_NAME"
         echo "GITHUB_RUN_ATTEMPT: $GITHUB_RUN_ATTEMPT"
     - name: Runsafe Platform Setup
+      if: github.event_name != 'schedule'
       shell: bash
       env:
         RUNSAFE_SBOM_GENERATOR_VERSION: 2.9.2

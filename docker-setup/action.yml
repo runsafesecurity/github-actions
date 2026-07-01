@@ -16,6 +16,7 @@ runs:
 
   steps:
     - name: List Github Env Vars
+      if: github.event_name != 'schedule'
       shell: bash
       run: |
         echo "GITHUB_REPOSITORY_ID: $GITHUB_REPOSITORY_ID"
@@ -25,7 +26,7 @@ runs:
         echo "GITHUB_REF_NAME: $GITHUB_REF_NAME"
         echo "GITHUB_RUN_ATTEMPT: $GITHUB_RUN_ATTEMPT"
     - name: Runsafe Platform Setup
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && github.event_name != 'schedule'
       shell: bash
       env:
         RUNSAFE_SBOM_GENERATOR_VERSION: 2.9.2
@@ -89,7 +90,7 @@ runs:
           echo "RUNSAFE_DOCKER_AUDIT_ID=${RUNSAFE_DOCKER_AUDIT_ID}" >> $GITHUB_ENV
         fi
     - name: Runsafe Docker Platform Setup - Linux
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && github.event_name != 'schedule'
       shell: bash
       run: |
         if [ ! -z "${RUNSAFE_DISABLED}" ]; then
@@ -141,8 +142,8 @@ runs:
           fi
         fi
     - name: Runsafe Docker Platform Setup - Windows
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && github.event_name != 'schedule'
       shell: bash
       run: |
-        echo "Docker SBOM generation is not supported on Windows yet. Please contact support@runsafesecurity.com to inquire about adding support."
+        echo "[RunSafe Security] Docker SBOM generation is not supported on Windows yet. Please contact support@runsafesecurity.com to inquire about adding support."
         exit 1;

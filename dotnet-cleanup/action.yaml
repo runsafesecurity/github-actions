@@ -4,7 +4,7 @@ runs:
   using: "composite"
   steps:
     - name: Runsafe .NET Platform Cleanup - Linux
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && github.event_name != 'schedule'
       shell: bash
       run: |
         CAPTURE_FILE="${GITHUB_WORKSPACE}/.dotnet_projects_captured/${GITHUB_RUN_ID}_scan_roots.txt"
@@ -16,7 +16,7 @@ runs:
 
         . ${GITHUB_WORKSPACE}/RUNSAFE_SBOM_PACKAGES/bin/dotnet-gremlin-cleanup.sh
     - name: Runsafe .NET Platform Cleanup - Windows
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && github.event_name != 'schedule'
       shell: pwsh
       run: |
         $captureFile = Join-Path $env:GITHUB_WORKSPACE ".dotnet_projects_captured\$($env:GITHUB_RUN_ID)_scan_roots.txt"
