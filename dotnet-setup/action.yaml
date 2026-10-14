@@ -29,7 +29,7 @@ runs:
       if: runner.os == 'Linux' && github.event_name != 'schedule'
       shell: bash
       env:
-        RUNSAFE_SBOM_GENERATOR_VERSION: 2.9.2
+        RUNSAFE_SBOM_GENERATOR_VERSION: 2.14.0
         RUNSAFE_SYFT_VERSION: 1.42.4
       run: |
         RUNSAFE_SERVER=https://app.runsafesecurity.com
@@ -118,7 +118,7 @@ runs:
       if: runner.os == 'Windows' && github.event_name != 'schedule'
       shell: bash
       env:
-        RUNSAFE_SBOM_GENERATOR_VERSION: 2.9.2
+        RUNSAFE_SBOM_GENERATOR_VERSION: 2.14.0
         RUNSAFE_SYFT_VERSION: 1.42.4
       run: |
         RUNSAFE_SERVER=https://app.runsafesecurity.com
