@@ -22,7 +22,7 @@ runs:
       if: runner.os == 'Linux'
       shell: bash
       env:
-        RUNSAFE_SBOM_GENERATOR_VERSION: 2.9.2
+        RUNSAFE_SBOM_GENERATOR_VERSION: 2.14.0
       run: |
         RUNSAFE_SERVER=https://app.runsafesecurity.com
         if [ -z "${RUNSAFE_SBOM_SERVER}" ]; then export RUNSAFE_SBOM_SERVER=${RUNSAFE_SERVER}; fi
